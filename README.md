@@ -1,42 +1,90 @@
-# Week 2 - Network Traffic Analysis
-Intern: Manahil Shahzadi
+# DG Interns Hub - Week 2
+## Network Traffic Analysis, Nmap and Windows Logging
 
-## Lab Setup
-- Kali: 192.168.56.102 (Wireshark, Nmap)
-- Ubuntu: 192.168.56.101 (Apache)
-- Windows 11: 192.168.56.1 (Event Viewer)
-- Network: VirtualBox Host-only 192.168.56.0/24
+**Intern:** [Manahil Shahzadi]  |  **Deadline:** 30 October 2026, 11:59 PM IST
 
-## Folder Structure
-Notes / Writeups / Findings / Captures / Cheat Sheets
+## 1. Goal
+Read packets and Windows event logs so Week 3 (endpoint + Snort IDS work) makes sense.
 
-## What I Did
+## 2. Lab setup
+| Machine | Role | IP |
+|---|---|---|
+| Kali Linux (VirtualBox) | Attacker / analyst (Wireshark 4.6.6, Nmap 7.99) | 192.168.56.102 |
+| Ubuntu (VirtualBox) | Apache 2.4.66 target | 192.168.56.101 |
+| Windows 11 laptop (host) | Windows target + Event Viewer / PowerShell | 192.168.56.1 |
 
-### 1. Wireshark Capture
-Ping, curl, nslookup captured on eth1
-- SYN, SYN-ACK, ACK handshake
-- HTTP GET and 200 OK
-- DNS query
-File: Captures/Task1_capture.pcapng
+VirtualBox: Adapter 1 = NAT, Adapter 2 = Host-only (192.168.56.0/24). Shared folder `/media/sf_captures` saves output straight into `Captures`.
 
-### 2. Nmap Scans
-- -sn 192.168.56.0/24 = 4 hosts up
-- -sV .101 = 80/tcp Apache 2.4.66
-- -sS .101 = SYN scan
-Filter: tcp.flags.syn==1 && tcp.flags.ack==0
-This filter shows port scan pattern for Snort Week 3
+## 3. Folder structure
+```
+DG Interns HUB/Week 2/
+├── Notes/                 8 theory answers, one file each
+├── Writeups/              6 TryHackMe rooms + 3 Wireshark sample captures
+├── Findings/              screenshots (Wireshark, Nmap, Event Viewer, PowerShell)
+├── Captures/              PCAP files + Nmap -oN / -oX output
+├── Cheat Sheets/          Wireshark (20) and Windows Event ID (15)
+├── Week2_Report.pdf
+├── Week2_Presentation.pptx
+└── README.md
+```
 
-### 3. Windows Events
-4625 Failed Logon, 4624 Success Logon Type 3, 4720 New User, 4732 Added to Admin, 7045 Service Created, 1102 Log Cleared
+## 4. Theory (Notes)
+1. TCP three-way handshake, teardown and flags table
+2. Protocol analysis table: DNS, HTTP, TLS, ARP, ICMP, SMB
+3. Capture vs display filters (10 examples)
+4. Nmap scan types: -sn, -sS, -sT, -sU, -sV, -O, -A
+5. Windows basics: processes, services, registry, users/groups, UAC, Event Viewer logs
+6. 15 key Security Event IDs
+7. Logon types 2, 3, 4, 5, 7, 10, 11
+8. Baseline and why it matters for a SOC analyst
 
-### 4. PowerShell
-Get-WinEvent for 4625 and export to CSV
+## 5. Lab: TryHackMe (free)
+Nmap, Live Host Discovery, Basic Port Scans, Windows Basics, Windows Fundamentals 1 and 2, plus 3 official Wireshark sample captures. One writeup per room in `Writeups/`.
 
-## TryHackMe Rooms
-Nmap, Live Host Discovery, Basic Port Scans, Windows Basics, Windows Fundamentals 1, Windows Fundamentals 2
+## 6. Hands-on results
+### Task 1 - Capture traffic
+Apache on Ubuntu; ping, curl and nslookup from Kali while Wireshark captured on eth1.
+- `Findings/01_icmp.png` - 4 echo requests / 4 replies
+- `Findings/02_tcp_handshake.png` - SYN, SYN-ACK, ACK (frames 462-464), GET, 200 OK, FIN
+- `Findings/03_http_get.png` - GET / HTTP/1.1
+- `Findings/04_dns.png` - DNS query for google.com
+- `Captures/Task1_capture.pcapng`
 
-## Key Learning
-Normal traffic = SYN > SYN-ACK > ACK > FIN. Scan = many SYN only. 4625+4720+4732 = attack story.
+### Task 2 - Nmap
+| Scan | Result |
+|---|---|
+| -sn 192.168.56.0/24 | 4 hosts up (.1, .100, .101, .102) in 10.02 s |
+| -sV .101 | 80/tcp open, Apache httpd 2.4.66 (Ubuntu) |
+| -O, -A .101 | OS and service detail (see output files) |
+| -sS .101 | SYN scan captured in Wireshark |
+| -sS -sV .1 | Windows host scan |
 
-## Tools Used
-Wireshark, Nmap, Event Viewer, PowerShell, VirtualBox
+Filter used on the SYN scan: `tcp.flags.syn==1 && tcp.flags.ack==0` -> many SYNs from one source to many ports in a fraction of a second. This is the pattern Snort will detect in Week 3.
+Files: `Captures/nmap_*.txt` (-oN), `nmap_*.xml` (-oX), `nmap_syn_scan.pcapng`.
+
+### Task 3 - Windows events (Windows 11 laptop)
+4625 failed logon, 4624 successful logon (Logon Type 3), 4720 new user, 4732 added to Administrators, 7045 service created/deleted (System log), 1102 log cleared. Screenshots `Findings/11_event_4625.png` to `16_event_1102.png`.
+
+### Task 4 - PowerShell hunting
+```powershell
+$ev = Get-WinEvent -FilterHashtable @{LogName='Security'; Id=4625}
+$ev | Select TimeCreated, Id, @{n='Account';e={$_.Properties[5].Value}} | Export-Csv failed_logons_4625.csv -NoTypeInformation
+Import-Csv failed_logons_4625.csv | Group-Object Account | Sort-Object Count -Descending | Format-Table Count, Name
+```
+Screenshot `Findings/17_powershell_4625.png`, CSV in `Captures/`.
+
+## 7. Cheat sheets
+- Wireshark Filter - Meaning - When to Use It (20 entries)
+- Windows Event ID - What It Means - When to Use It (15 entries)
+
+## 8. Key learnings
+- A normal TCP session is SYN, SYN-ACK, ACK ... FIN/ACK; scans break that pattern.
+- Display filters turn thousands of packets into one readable story.
+- 4625 + 4624 + 4720 + 4732 in sequence is a compromise story; 1102 means someone is hiding it.
+- Knowing the baseline is what makes anomalies visible.
+
+## 9. LinkedIn
+Concept post "What a port scan looks like in Wireshark" and the weekly post (PCAP + Event Viewer screenshots, tagging DG Interns Hub).
+
+## 10. Rules followed
+No late submission, own words (no plagiarism), only free tools.
